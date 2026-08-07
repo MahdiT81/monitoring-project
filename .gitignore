@@ -1,0 +1,23 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+
+# Docker (runtime data only - configs are tracked)
+*.log
+
+# PowerShell
+*.ps1xml
+
+# OS / editor
+Thumbs.db
+.DS_Store
+.idea/
+.vscode/
+
+# Local secrets (never commit real credentials)
+*.env
+.env.*
+!*.env.example
