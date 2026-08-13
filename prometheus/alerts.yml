@@ -1,0 +1,56 @@
+groups:
+  - name: webapp-alerts
+    rules:
+      - alert: WebAppDown
+        expr: up{job="webapp"} == 0
+        for: 30s
+        labels:
+          severity: critical
+        annotations:
+          summary: "Web app is down"
+          description: "Prometheus has been unable to scrape the web app for more than 30 seconds."
+
+      - alert: HighErrorRate
+        expr: >
+          sum(rate(app_http_requests_total{status=~"5.."}[2m]))
+          /
+          sum(rate(app_http_requests_total[2m])) > 0.05
+        for: 1m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High HTTP error rate (>5%)"
+          description: "More than 5% of requests are returning 5xx errors over the last 2 minutes."
+
+      - alert: HighLatencyP95
+        expr: >
+          histogram_quantile(0.95,
+            sum(rate(app_http_request_duration_seconds_bucket[5m])) by (le)
+          ) > 1
+        for: 2m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High p95 latency (>1s)"
+          description: "The p95 request latency has exceeded 1 second for 2 minutes."
+
+      - alert: HealthProbeFailing
+        expr: probe_success{job="blackbox"} == 0
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Health check failing ({{ $labels.instance }})"
+          description: "Blackbox exporter cannot reach {{ $labels.instance }} with an HTTP 200 for over a minute."
+
+  - name: infra-alerts
+    rules:
+      - alert: ContainerUsingTooMuchCpu
+        expr: >
+          sum(rate(container_cpu_usage_seconds_total{name!=""}[3m])) by (name) * 100 > 80
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Container {{ $labels.name }} using high CPU"
+          description: "Container {{ $labels.name }} has been above 80% CPU usage for 5 minutes."
