@@ -1,0 +1,35 @@
+global:
+  resolve_timeout: 5m
+
+# Routing tree: how fired alerts get grouped, deduplicated and delivered
+route:
+  receiver: "default"
+  group_by: ["alertname", "severity"]
+  group_wait: 30s        # wait to batch alerts of the same group
+  group_interval: 5m     # minimum time between notifications for a group
+  repeat_interval: 4h    # re-notify about an unresolved alert after this
+
+receivers:
+  - name: "default"
+    # Wire up a real notification channel by uncommenting one of these:
+    #
+    # webhook_configs:
+    #   - url: "http://your-webhook:8000/alerts"   # e.g. a Telegram/Slack bridge
+    #
+    # email_configs:
+    #   - to: "you@example.com"
+    #     from: "alertmanager@example.com"
+    #     smarthost: "smtp.gmail.com:587"
+    #     auth_username: "you@example.com"
+    #     auth_password: "app-password"
+    #
+    # For now alerts are visible in the Alertmanager UI:
+    #   http://localhost:9093
+
+inhibit_rules:
+  # If the app is completely down, don't spam us with error-rate alerts too
+  - source_matchers:
+      - alertname = WebAppDown
+    target_matchers:
+      - severity = warning
+    equal: []
