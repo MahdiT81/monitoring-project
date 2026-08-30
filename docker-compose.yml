@@ -1,0 +1,137 @@
+services:
+  webapp:
+    build: ./app
+    container_name: webapp
+    ports:
+      - "5000:5000"
+    restart: unless-stopped
+    networks:
+      - monitoring
+
+  prometheus:
+    image: prom/prometheus:v2.53.0
+    container_name: prometheus
+    volumes:
+      - ./prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - ./prometheus/alerts.yml:/etc/prometheus/alerts.yml:ro
+      - prometheus-data:/prometheus
+    ports:
+      - "9090:9090"
+    restart: unless-stopped
+    networks:
+      - monitoring
+
+  grafana:
+    image: grafana/grafana:11.1.0
+    container_name: grafana
+    volumes:
+      - grafana-data:/var/lib/grafana
+      - ./grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./grafana/dashboards:/var/lib/grafana/dashboards:ro
+    environment:
+      - GF_SECURITY_ADMIN_USER=admin
+      - GF_SECURITY_ADMIN_PASSWORD=admin
+    ports:
+      - "3000:3000"
+    depends_on:
+      - prometheus
+    restart: unless-stopped
+    networks:
+      - monitoring
+
+  node-exporter:
+    image: prom/node-exporter:v1.8.1
+    container_name: node-exporter
+    # NOTE: on Linux hosts, add "pid: host" plus a "/:/host:ro,rslave"
+    # volume and "--path.rootfs=/host" to the command for real host metrics.
+    # Those flags are omitted because Docker Desktop (Windows/WSL2)
+    # does not support mounting "/" into a container.
+    ports:
+      - "9100:9100"
+    restart: unless-stopped
+    networks:
+      - monitoring
+
+  alertmanager:
+    image: prom/alertmanager:v0.27.0
+    container_name: alertmanager
+    volumes:
+      - ./alertmanager/alertmanager.yml:/etc/alertmanager/alertmanager.yml:ro
+    ports:
+      - "9093:9093"
+    restart: unless-stopped
+    networks:
+      - monitoring
+
+  blackbox-exporter:
+    image: quay.io/prometheus/blackbox-exporter:v0.24.0
+    container_name: blackbox
+    volumes:
+      - ./blackbox/blackbox.yml:/etc/blackbox_exporter/config.yml:ro
+    ports:
+      - "9115:9115"
+    restart: unless-stopped
+    networks:
+      - monitoring
+
+  cadvisor:
+    image: ghcr.io/google/cadvisor:v0.60.5
+    container_name: cadvisor
+    privileged: true
+    # docker_only: use the Docker provider so containers carry readable
+    # labels (name / compose service); without it, Docker Desktop (WSL2)
+    # falls back to raw cgroups identified only by 64-char hashes.
+    # housekeeping 10s: default 1s is wasted precision and adds overhead.
+    # v0.60.5: older releases (<= v0.47) cannot list containers on
+    # Docker Engine 29 (API incompatibility) and silently show nothing.
+    command:
+      - --docker_only=true
+      - --housekeeping_interval=10s
+    devices:
+      - /dev/kmsg
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      # required by newer cAdvisor for container metadata (name/image labels)
+      - /run/containerd/containerd.sock:/run/containerd/containerd.sock:ro
+      - /sys:/sys:ro
+      - /var/lib/docker/:/var/lib/docker:ro
+    ports:
+      - "8080:8080"
+    restart: unless-stopped
+    networks:
+      - monitoring
+
+  loki:
+    image: grafana/loki:3.1.0
+    container_name: loki
+    volumes:
+      - ./loki/loki-config.yml:/etc/loki/local-config.yaml:ro
+      - loki-data:/loki
+    ports:
+      - "13100:3100"   # host 3100 is often inside a Windows Hyper-V/WSL reserved port range
+    restart: unless-stopped
+    networks:
+      - monitoring
+
+  promtail:
+    image: grafana/promtail:3.1.0
+    container_name: promtail
+    volumes:
+      - ./loki/promtail-config.yml:/etc/promtail/config.yml:ro
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - promtail-positions:/positions
+    depends_on:
+      - loki
+    restart: unless-stopped
+    networks:
+      - monitoring
+
+volumes:
+  prometheus-data:
+  grafana-data:
+  loki-data:
+  promtail-positions:
+
+networks:
+  monitoring:
+    driver: bridge
